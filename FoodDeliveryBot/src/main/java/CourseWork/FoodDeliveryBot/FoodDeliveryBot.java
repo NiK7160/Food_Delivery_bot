@@ -1,7 +1,10 @@
 package CourseWork.FoodDeliveryBot;
 
 import CourseWork.FoodDeliveryBot.config.BotConfig;
+import CourseWork.FoodDeliveryBot.model.Burger;
+import CourseWork.FoodDeliveryBot.model.BurgersRepository;
 import lombok.AllArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -17,6 +20,8 @@ import java.util.List;
 @AllArgsConstructor
 public class FoodDeliveryBot extends TelegramLongPollingBot {
 
+    @Autowired
+    private BurgersRepository burgersRepository;
     private final BotConfig botConfig;
 
     @Override
@@ -50,6 +55,8 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
             } else if ("Бургери".equals(textFromUser)) {
                 state = "burgers";
                 sendMessage(chatId, "Для отримання інформації про страву оберіть її з меню", state);
+            } else if (getBurgerName().contains(textFromUser)) {
+                getBurger(chatId, textFromUser);
             } else if ("Повернутися в головне меню".equals(textFromUser)) {
                 state = "mainMenu";
                 sendMessage(chatId, "Повернулися в головне меню. \nЩо бажаєте зробити?", state);
@@ -117,14 +124,39 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
             keyboardRows.add(row);
         } else if (state.equalsIgnoreCase("burgers")) {
             row = new KeyboardRow();
-            row.add("Бургер 1");
-            row.add("Бургер 2");
-            row.add("Бургер 3");
+            row.add("Гамбургер");
+            row.add("Чизбургер");
+            row.add("Дабл Чизбургер");
             keyboardRows.add(row);
         } else {
             state = "mainMenu";
         }
         keyboardMarkup.setKeyboard(keyboardRows);
         message.setReplyMarkup(keyboardMarkup);
+    }
+
+    private List<String> getBurgerName() {
+        var burgers = burgersRepository.findAll();
+
+        List<String> burgerName = new ArrayList<>();
+
+        for (Burger burger : burgers) {
+            burgerName.add((burger.getName()).trim());
+        }
+        return burgerName;
+    }
+
+    private void getBurger(Long chatId, String burgerName) {
+        var burgers = burgersRepository.findAll();
+
+        String message = "Помилка";
+        for (Burger burger : burgers) {
+
+            if (burgerName.equals((burger.getName().trim()))) {
+                System.out.println("true");
+                message = burger.getName() + "\n" + burger.getPrice() + " грн.\n" + burger.getWeight() + " грам\n" + burger.getDescription();
+            }
+        }
+        sendMessage(chatId, message, "mainMenu");
     }
 }
