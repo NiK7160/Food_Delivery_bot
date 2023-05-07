@@ -8,6 +8,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
+import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
@@ -80,6 +82,18 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
         }
     }
 
+    private void sendPhoto(Long chatId, String imageToSend, String textToSend, String state) {
+        SendPhoto photo = new SendPhoto();
+        photo.setChatId(chatId);
+        photo.setPhoto(new InputFile(imageToSend));
+        photo.setCaption(textToSend);
+        try {
+            execute(photo);
+        } catch (TelegramApiException e) {
+
+        }
+    }
+
     private void startCommandReceived(Long chatId, String name) {
         String state = "mainMenu";
         String answer = "Вітаю, " + name + "!\uD83D\uDC4B" + "\n" +
@@ -124,9 +138,15 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
             keyboardRows.add(row);
         } else if (state.equalsIgnoreCase("burgers")) {
             row = new KeyboardRow();
-            row.add("Гамбургер");
-            row.add("Чизбургер");
-            row.add("Дабл Чизбургер");
+            for(int i = 0; i < getBurgerName().size(); i++){
+                row.add(getBurgerName().get(i));
+                if(i % 2 == 0 && i != 0){
+                    keyboardRows.add(row);
+                    row = new KeyboardRow();
+                }
+            }
+            row = new KeyboardRow();
+            row.add("Повернутися в головне меню");
             keyboardRows.add(row);
         } else {
             state = "mainMenu";
@@ -146,17 +166,18 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
         return burgerName;
     }
 
-    private void getBurger(Long chatId, String burgerName) {
+    private void getBurger(Long chatId, String burgerName){
         var burgers = burgersRepository.findAll();
 
         String message = "Помилка";
-        for (Burger burger : burgers) {
+        String photo = null;
 
+        for (Burger burger : burgers) {
             if (burgerName.equals((burger.getName().trim()))) {
-                System.out.println("true");
                 message = burger.getName() + "\n" + burger.getPrice() + " грн.\n" + burger.getWeight() + " грам\n" + burger.getDescription();
+                photo = burger.getImage();
             }
         }
-        sendMessage(chatId, message, "mainMenu");
+        sendPhoto(chatId, photo, message, "mainMenu");
     }
 }

@@ -20,4 +20,6 @@ public class Burger {
     private float weight;
 
     private float price;
+
+    private String image;
 }
