@@ -7,15 +7,19 @@ import lombok.Setter;
 
 @Getter
 @Setter
-@Entity(name = "burger")
-public class Burger {
+@Entity(name = "dish")
+public class Dish {
 
     @Id
-    private int id_burger;
+    private int id;
+
+    private String category;
 
     private String name;
 
     private String description;
+
+    private String additional;
 
     private float weight;
 

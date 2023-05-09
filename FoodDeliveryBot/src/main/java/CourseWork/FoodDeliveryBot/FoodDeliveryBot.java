@@ -1,12 +1,13 @@
 package CourseWork.FoodDeliveryBot;
 
 import CourseWork.FoodDeliveryBot.config.BotConfig;
-import CourseWork.FoodDeliveryBot.model.Burger;
-import CourseWork.FoodDeliveryBot.model.BurgersRepository;
+import CourseWork.FoodDeliveryBot.model.Dish;
+import CourseWork.FoodDeliveryBot.model.DishesRepository;
 import lombok.AllArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
+import org.telegram.telegrambots.meta.api.methods.ParseMode;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
@@ -23,7 +24,7 @@ import java.util.List;
 public class FoodDeliveryBot extends TelegramLongPollingBot {
 
     @Autowired
-    private BurgersRepository burgersRepository;
+    private DishesRepository dishesRepository;
     private final BotConfig botConfig;
 
     @Override
@@ -38,36 +39,36 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
 
     @Override
     public void onUpdateReceived(Update update) {
-        String state = "start";
-
+        String state;
         if (update.hasMessage() && update.getMessage().hasText()) {
             String textFromUser = update.getMessage().getText();
             Long chatId = update.getMessage().getChatId();
             String userFirstName = update.getMessage().getFrom().getFirstName();
 
             if ("/start".equals(textFromUser) || "Старт".equals(textFromUser)) {
-                state = "mainMenu";
                 startCommandReceived(chatId, userFirstName);
-            } else if ("Меню".equals(textFromUser)) {
+            } else if ("Меню".equals(textFromUser) || "Повернутися до меню".equals(textFromUser)) {
                 state = "categories";
                 sendMessage(chatId, "Оберіть категорію страв для перегляду: ", state);
             } else if ("Кошик".equals(textFromUser)) {
                 state = "mainMenu";
                 sendMessage(chatId, "Ця функція знаходиться в розробці", state);
-            } else if ("Бургери".equals(textFromUser)) {
-                state = "burgers";
+            } else if (getDishCategories().contains(textFromUser)) {
+                state = textFromUser;
                 sendMessage(chatId, "Для отримання інформації про страву оберіть її з меню", state);
-            } else if (getBurgerName().contains(textFromUser)) {
-                getBurger(chatId, textFromUser);
+            } else if (getDishNames(getCategoryOfDish(textFromUser)).contains(textFromUser)) {
+                getDishInfo(chatId, getCategoryOfDish(textFromUser), textFromUser);
             } else if ("Повернутися в головне меню".equals(textFromUser)) {
                 state = "mainMenu";
                 sendMessage(chatId, "Повернулися в головне меню. \nЩо бажаєте зробити?", state);
+            } else if ("Все меню".equals(textFromUser)) {
+                state = "All";
+                sendMessage(chatId, "Для отримання інформації про страву оберіть її з меню", state);
             } else {
                 state = "mainMenu";
                 sendMessage(chatId, "Введена команда не підтримується.", state);
             }
         }
-
     }
 
     private void sendMessage(Long chatId, String textToSend, String state) {
@@ -86,6 +87,7 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
         SendPhoto photo = new SendPhoto();
         photo.setChatId(chatId);
         photo.setPhoto(new InputFile(imageToSend));
+        photo.setParseMode(ParseMode.HTML);
         photo.setCaption(textToSend);
         try {
             execute(photo);
@@ -110,22 +112,20 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
         if (state.equalsIgnoreCase("start")) {
             row.add("Старт");
             keyboardRows.add(row);
-            state = "mainMenu";
         } else if (state.equalsIgnoreCase("mainMenu")) {
             row = new KeyboardRow();
             row.add("Меню");
             row.add("Кошик");
             keyboardRows.add(row);
-            state = "categories";
         } else if (state.equalsIgnoreCase("categories")) {
             row = new KeyboardRow();
             row.add("Бургери");
             row.add("Піца");
-            row.add("Суші");
+            row.add("Суші та Роли");
             keyboardRows.add(row);
             row = new KeyboardRow();
-            row.add("Роли");
-            row.add("Закуски");
+            row.add("Страви на грилі");
+            row.add("Гарячі страви");
             row.add("Салати");
             keyboardRows.add(row);
             row = new KeyboardRow();
@@ -136,18 +136,8 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
             row = new KeyboardRow();
             row.add("Повернутися в головне меню");
             keyboardRows.add(row);
-        } else if (state.equalsIgnoreCase("burgers")) {
-            row = new KeyboardRow();
-            for(int i = 0; i < getBurgerName().size(); i++){
-                row.add(getBurgerName().get(i));
-                if(i % 2 == 0 && i != 0){
-                    keyboardRows.add(row);
-                    row = new KeyboardRow();
-                }
-            }
-            row = new KeyboardRow();
-            row.add("Повернутися в головне меню");
-            keyboardRows.add(row);
+        } else if (getDishCategories().contains(state) || state.equals("All")) {
+            categoryKeyboardBuilder(state, keyboardRows);
         } else {
             state = "mainMenu";
         }
@@ -155,27 +145,72 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
         message.setReplyMarkup(keyboardMarkup);
     }
 
-    private List<String> getBurgerName() {
-        var burgers = burgersRepository.findAll();
-
-        List<String> burgerName = new ArrayList<>();
-
-        for (Burger burger : burgers) {
-            burgerName.add((burger.getName()).trim());
+    private void categoryKeyboardBuilder(String category, List<KeyboardRow> keyboardRows) {
+        KeyboardRow row = new KeyboardRow();
+        int j = 1;
+        for (int i = 0; i < getDishNames(category).size(); i++) {
+            row.add(getDishNames(category).get(i));
+            if (j % 3 == 0) {
+                keyboardRows.add(row);
+                row = new KeyboardRow();
+            }
+            j++;
         }
-        return burgerName;
+        row = new KeyboardRow();
+        row.add("Повернутися до меню");
+        keyboardRows.add(row);
     }
 
-    private void getBurger(Long chatId, String burgerName){
-        var burgers = burgersRepository.findAll();
+    private List<String> getDishNames(String dishCategory) {
+        var dishes = dishesRepository.findAll();
+
+        List<String> dishNames = new ArrayList<>();
+
+        for (Dish dish : dishes) {
+            if (dishCategory.equals(dish.getCategory()) || dishCategory.equals("All"))
+                dishNames.add((dish.getName()).trim());
+        }
+        return dishNames;
+    }
+
+    private List<String> getDishCategories() {
+        var dishes = dishesRepository.findAll();
+
+        List<String> dishCategories = new ArrayList<>();
+
+        for (Dish dish : dishes) {
+            if (!dishCategories.contains(dish.getCategory()))
+                dishCategories.add(dish.getCategory());
+        }
+        return dishCategories;
+    }
+
+    private String getCategoryOfDish(String dishName) {
+        String category = "none";
+        var dishes = dishesRepository.findAll();
+        for (Dish dish : dishes){
+            if(dish.getName().equals(dishName))
+                category = dish.getCategory();
+        }
+        return category;
+    }
+
+    private void getDishInfo(Long chatId, String dishCategory, String dishName) {
+        var dishes = dishesRepository.findAll();
 
         String message = "Помилка";
         String photo = null;
 
-        for (Burger burger : burgers) {
-            if (burgerName.equals((burger.getName().trim()))) {
-                message = burger.getName() + "\n" + burger.getPrice() + " грн.\n" + burger.getWeight() + " грам\n" + burger.getDescription();
-                photo = burger.getImage();
+        for (Dish dish : dishes) {
+            if (dishName.equals((dish.getName().trim())) && dishCategory.equals(dish.getCategory())) {
+                if (!dish.getCategory().equals("Напої")) {
+                    message = "<b>" + dish.getName() + " - " + dish.getPrice() + " грн.</b>\n\n<i>" + dish.getWeight() + " грам, " +
+                            dish.getAdditional() + "\n" + dish.getDescription() + "</i>";
+                } else {
+                    message = "<b>" + dish.getName() + " - " + dish.getPrice() + " грн.</b>\n\n<i>" + dish.getWeight() + " л, " +
+                            dish.getAdditional() + "\n" + dish.getDescription() + "</i>";
+                }
+                photo = dish.getImage();
             }
         }
         sendPhoto(chatId, photo, message, "mainMenu");
