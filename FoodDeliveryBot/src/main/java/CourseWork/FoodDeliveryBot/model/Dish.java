@@ -26,4 +26,17 @@ public class Dish {
     private float price;
 
     private String image;
+
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
+
+        Dish dish = (Dish) o;
+
+        return id == dish.getId() && name.equals(dish.getName());
+    }
 }

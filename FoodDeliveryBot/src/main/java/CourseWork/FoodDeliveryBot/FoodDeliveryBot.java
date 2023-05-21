@@ -55,7 +55,7 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
             } else if ("Меню".equals(textFromUser) || "Повернутися до вибору категорій страв".equals(textFromUser)) {
                 state = "categories";
                 sendMessage(chatId, "Оберіть категорію страв для перегляду: ", state);
-            } else if ("Кошик".equals(textFromUser)) {
+            } else if ("Кошик".equals(textFromUser) || "Переглянути кошик".equals(textFromUser)) {
                 state = "Кошик";
                 sendMessage(chatId, cart.getCartInfo(), state);
             } else if (getDishCategories().contains(textFromUser)) {
@@ -74,7 +74,15 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
                 sendMessage(chatId, "Ця функція знаходиться в розробці", state);
             } else if ("Внести зміни до кошику".equals(textFromUser)) {
                 state = "Зміни у кошику";
-                sendMessage(chatId, "Ця функція знаходиться в розробці", state);
+                sendMessage(chatId, "Що бажаєте зробити?", state);
+            } else if ("Видалити страву з кошику".equals(textFromUser)) {
+                state = "Видалення з кошику";
+                sendMessage(chatId, "Оберіть страву, яку бажаєте видалити:", state);
+            } else if (cart.getDishNames().contains(textFromUser)) {
+                state = "Кошик";
+                textFromUser = textFromUser.replaceFirst("Видалити ", "");
+                cart.removeDish(textFromUser);
+                sendMessage(chatId, "Страву " + textFromUser + " видалено з кошику.", state);
             } else {
                 state = "mainMenu";
                 sendMessage(chatId, "Введена команда не підтримується.", state);
@@ -189,8 +197,31 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
             row = new KeyboardRow();
             row.add("Оформити замовлення");
             row.add("Внести зміни до кошику");
+            row.add("Переглянути кошик");
+            keyboardRows.add(row);
+            row = new KeyboardRow();
             row.add("Повернутися до вибору категорій страв");
             keyboardRows.add(row);
+        } else if (state.equals("Зміни у кошику")) {
+            row = new KeyboardRow();
+            row.add("Змінити кількість страв");
+            row.add("Видалити страву з кошику");
+            row.add("Повернутися до вибору категорій страв");
+            keyboardRows.add(row);
+        } else if (state.equals("Видалення з кошику")) {
+
+            row = new KeyboardRow();
+            for (int i = 0; i < cart.getDishNames().size(); i++) {
+                row.add(cart.getDishNames().get(i));
+                if ((1 + i) % 3 == 0 || i == cart.getDishNames().size() - 1) {
+                    keyboardRows.add(row);
+                    row = new KeyboardRow();
+                }
+            }
+            row = new KeyboardRow();
+            row.add("Повернутися до вибору категорій страв");
+            keyboardRows.add(row);
+
         } else {
             state = "mainMenu";
         }
@@ -202,7 +233,7 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
         KeyboardRow row = new KeyboardRow();
         for (int i = 0; i < getDishNames(category).size(); i++) {
             row.add(getDishNames(category).get(i));
-            if ((1 + i) % 3 == 0) {
+            if ((1 + i) % 3 == 0 || i == getDishNames(category).size() - 1) {
                 keyboardRows.add(row);
                 row = new KeyboardRow();
             }

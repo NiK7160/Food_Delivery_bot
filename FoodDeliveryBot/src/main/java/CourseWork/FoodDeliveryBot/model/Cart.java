@@ -57,12 +57,53 @@ public class Cart {
         if (!dishes.isEmpty()) {
             message = new StringBuilder("<b>Кошик:</b>\n\n");
 
-            for (Dish dish : dishes) {
-                message.append(dishes.indexOf(dish) + 1).append(". ").append(dish.getName()).append(" - ").append(dish.getPrice()).append(" грн.").append("\n");
+            List<Dish> dishesWithoutRepeat = new ArrayList<>(getDishesWithoutRepeat());
+
+            for (Dish dish : dishesWithoutRepeat) {
+                message.append(dishesWithoutRepeat.indexOf(dish) + 1).append(". ").append(dish.getName()).append(" - ").append(dish.getPrice()).append(" грн. - ").append(getDishQuantity(dish)).append("шт.\n");
             }
             message.append("\n<b> До сплати: ").append(getTotalPrice()).append(" грн.</b>");
         }
 
         return message.toString();
+    }
+
+    public int getDishQuantity(Dish dish) {
+        int dishQuantity = 0;
+
+        for (Dish value : dishes) {
+            if (value.getId() == dish.getId())
+                dishQuantity++;
+        }
+
+        return dishQuantity;
+    }
+
+    public void removeDish(String dishName) {
+//        if (findDishInMenu(dishName) != null)
+//            dishes.remove(findDishInMenu(dishName));
+
+        if (findDishInMenu(dishName) != null){
+            dishes.removeIf(dish -> dish.getName().equals(dishName));
+        }
+    }
+
+    public List<String> getDishNames() {
+        List<String> dishNames = new ArrayList<>();
+
+        for (Dish dish : getDishesWithoutRepeat()) {
+            dishNames.add("Видалити " + dish.getName());
+        }
+        return dishNames;
+    }
+
+    public List<Dish> getDishesWithoutRepeat(){
+        List<Dish> uniqueDishes = new ArrayList<>();
+        for (Dish dish : dishes) {
+            if (!uniqueDishes.contains(dish)) {
+                uniqueDishes.add(dish);
+            }
+        }
+        return uniqueDishes;
     }
 }
