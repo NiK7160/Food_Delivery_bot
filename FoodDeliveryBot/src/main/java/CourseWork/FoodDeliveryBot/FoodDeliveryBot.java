@@ -78,11 +78,25 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
             } else if ("Видалити страву з кошику".equals(textFromUser)) {
                 state = "Видалення з кошику";
                 sendMessage(chatId, "Оберіть страву, яку бажаєте видалити:", state);
-            } else if (cart.getDishNames().contains(textFromUser)) {
+            } else if (cart.getDishNamesToChange("Видалення з кошику").contains(textFromUser)) {
                 state = "Кошик";
                 textFromUser = textFromUser.replaceFirst("Видалити ", "");
-                cart.removeDish(textFromUser);
+                cart.removeAllDishWithName(textFromUser);
                 sendMessage(chatId, "Страву " + textFromUser + " видалено з кошику.", state);
+            } else if ("Змінити кількість страв".equals(textFromUser)) {
+                state = "Змінити кількість страв";
+                sendMessage(chatId, "Оберіть страву, кількість якої бажаєте змінити:", state);
+            } else if (cart.getDishNamesToChange("Змінити кількість страв").contains(textFromUser)) {
+                state = "Кошик";
+                textFromUser = textFromUser.replaceFirst("Змінити ", "");
+                sendDishPhoto(chatId, cart.getDishPhoto(textFromUser), cart.getDishInfo(textFromUser), textFromUser, "Зміна кошику");
+            } else if ("Очистити кошик".equals(textFromUser)) {
+                state = "mainMenu";
+                cart.removeAllFromCart();
+                sendMessage(chatId, "Всі страви з кошику було видалено.", state);
+            } else if ("Повернутися до перегляду кошика".equals(textFromUser)) {
+                state = "Кошик";
+                sendMessage(chatId, "Повернулися до перегляду кошика.", state);
             } else {
                 state = "mainMenu";
                 sendMessage(chatId, "Введена команда не підтримується.", state);
@@ -97,6 +111,16 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
                 sendMessage(chatId, message, "Додано в кошик");
             } else if (callbackData.equals("Кошик")) {
                 sendMessage(chatId, cart.getCartInfo(), "Кошик");
+            } else if (cart.getDishNamesToChange("Decrease").contains(callbackData)) {
+                callbackData = callbackData.replaceFirst("Decrease ", "");
+                cart.removeDish(callbackData);
+                String message = "Кількість була зменшена!";
+                sendMessage(chatId, message, "Перегляд кошику");
+            } else if (cart.getDishNamesToChange("Increase").contains(callbackData)) {
+                callbackData = callbackData.replaceFirst("Increase ", "");
+                cart.addDishToCart(callbackData);
+                String message = "Кількість була збільшена!";
+                sendMessage(chatId, message, "Додано в кошик");
             }
         }
     }
@@ -108,8 +132,8 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
         message.setParseMode(ParseMode.HTML);
         keyboardBuilder(message, state);
 
-        if (state.equals("Додано в кошик"))
-            message.setReplyMarkup(inlineKeyboardBuilder("Переглянути кошик", "Кошик"));
+        if (state.equals("Додано в кошик") || state.equals("Перегляд кошику"))
+            message.setReplyMarkup(inlineKeyboardBuilder("Переглянути кошик", "Кошик", "Перегляд кошику"));
 
         try {
             execute(message);
@@ -118,14 +142,18 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
         }
     }
 
-    private void sendDishPhoto(Long chatId, String imageToSend, String textToSend, String dishName) {
+    private void sendDishPhoto(Long chatId, String imageToSend, String textToSend, String dishName, String state) {
         SendPhoto photo = new SendPhoto();
         photo.setChatId(chatId);
         photo.setPhoto(new InputFile(imageToSend));
         photo.setParseMode(ParseMode.HTML);
         photo.setCaption(textToSend);
 
-        photo.setReplyMarkup(inlineKeyboardBuilder("Додати до кошику", dishName));
+        if (state.equals("Додавання до кошику")) {
+            photo.setReplyMarkup(inlineKeyboardBuilder("Додати до кошику", dishName, state));
+        } else if (state.equals("Зміна кошику")) {
+            photo.setReplyMarkup(inlineKeyboardBuilder("", dishName, state));
+        }
 
         try {
             execute(photo);
@@ -134,17 +162,30 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
         }
     }
 
-    private InlineKeyboardMarkup inlineKeyboardBuilder(String ButtonText, String callbackData) {
+    private InlineKeyboardMarkup inlineKeyboardBuilder(String ButtonText, String callbackData, String state) {
         InlineKeyboardMarkup inlineMarkup = new InlineKeyboardMarkup();
         List<List<InlineKeyboardButton>> inlineRows = new ArrayList<>();
         List<InlineKeyboardButton> inlineRow = new ArrayList<>();
 
-        InlineKeyboardButton inlineButton = new InlineKeyboardButton();
 
-        inlineButton.setText(ButtonText);
-        inlineButton.setCallbackData(callbackData);
+        if (state.equals("Зміна кошику")) {
+            InlineKeyboardButton decreaseButton = new InlineKeyboardButton();
+            decreaseButton.setText("➖");
+            decreaseButton.setCallbackData("Decrease " + callbackData);
+            inlineRow.add(decreaseButton);
 
-        inlineRow.add(inlineButton);
+            InlineKeyboardButton increaseButton = new InlineKeyboardButton();
+            increaseButton.setText("➕");
+            increaseButton.setCallbackData("Increase " + callbackData);
+            inlineRow.add(increaseButton);
+        } else {
+            InlineKeyboardButton inlineButton = new InlineKeyboardButton();
+
+            inlineButton.setText(ButtonText);
+            inlineButton.setCallbackData(callbackData);
+            inlineRow.add(inlineButton);
+        }
+
         inlineRows.add(inlineRow);
         inlineMarkup.setKeyboard(inlineRows);
 
@@ -206,14 +247,17 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
             row = new KeyboardRow();
             row.add("Змінити кількість страв");
             row.add("Видалити страву з кошику");
-            row.add("Повернутися до вибору категорій страв");
+            row.add("Очистити кошик");
             keyboardRows.add(row);
-        } else if (state.equals("Видалення з кошику")) {
-
             row = new KeyboardRow();
-            for (int i = 0; i < cart.getDishNames().size(); i++) {
-                row.add(cart.getDishNames().get(i));
-                if ((1 + i) % 3 == 0 || i == cart.getDishNames().size() - 1) {
+            row.add("Повернутися до перегляду кошика");
+            keyboardRows.add(row);
+        } else if (state.equals("Видалення з кошику") || state.equals("Змінити кількість страв")) {
+            //TODO: Оптимізувати створення клавіатури
+            row = new KeyboardRow();
+            for (int i = 0; i < cart.getDishNamesToChange(state).size(); i++) {
+                row.add(cart.getDishNamesToChange(state).get(i));
+                if ((1 + i) % 3 == 0 || i == cart.getDishNamesToChange(state).size() - 1) {
                     keyboardRows.add(row);
                     row = new KeyboardRow();
                 }
@@ -295,6 +339,6 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
                 photo = dish.getImage();
             }
         }
-        sendDishPhoto(chatId, photo, message, dishName);
+        sendDishPhoto(chatId, photo, message, dishName, "Додавання до кошику");
     }
 }
