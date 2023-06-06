@@ -157,4 +157,19 @@ public class Cart {
     public boolean isEmpty() {
         return dishes.isEmpty();
     }
+
+    public String getOrderList(){
+        StringBuilder message = new StringBuilder();
+
+        if (!dishes.isEmpty()) {
+
+            List<Dish> dishesWithoutRepeat = new ArrayList<>(getDishesWithoutRepeat());
+
+            for (Dish dish : dishesWithoutRepeat) {
+                message.append(dishesWithoutRepeat.indexOf(dish) + 1).append(". ").append(dish.getName()).append(" - ").append(dish.getPrice()).append(" грн. - ").append(getDishQuantity(dish)).append(" шт.\n");
+            }
+        }
+
+        return message.toString();
+    }
 }
