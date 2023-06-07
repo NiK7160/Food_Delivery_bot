@@ -19,6 +19,7 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @Component
 //@AllArgsConstructor
@@ -42,6 +43,7 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
     public static final String ADDITIONAL_INFO = "Вказати додаткову інформацію";
     public static final String CONFIRM_ORDER = "Підтвердити замовлення";
     public static final String ORDER_COMPLETED = "Замовлення оформлено";
+    public static final String PREVIOUS_ORDERS_REVIEW = "Перегляд минулих замовлень";
 
     @Autowired
     private final DishesRepository dishesRepository;
@@ -104,7 +106,7 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
                     sendMessage(chatId, "Кошик порожній, тому оформити замовлення неможливо!");
                 } else {
                     state = MAKE_ORDER;
-                    sendMessage(chatId, "Введіть ім'я одержувача замовлення:");
+                    sendMessage(chatId, "Введіть ім'я одержувача замовлення або виберіть серед запропонованих варіантів:");
                 }
 
             } else if (state.equals(MAKE_ORDER)) {
@@ -113,11 +115,11 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
                 order.setOrderList(cart.getOrderList());
                 order.setOrderPrice(cart.getTotalPrice());
                 state = DELIVERY_ADDRESS;
-                sendMessage(chatId, "Вкажіть адресу доставки:");
+                sendMessage(chatId, "Вкажіть адресу доставки або виберіть серед запропонованих варіантів:");
             } else if(state.equals(DELIVERY_ADDRESS)){
                 order.setDeliveryAddress(textFromUser);
                 state = PHONE_NUMBER;
-                sendMessage(chatId, "Вкажіть номер телефону для зв'язку:");
+                sendMessage(chatId, "Вкажіть номер телефону для зв'язку або виберіть серед запропонованих варіантів:");
             } else if(state.equals(PHONE_NUMBER)){
                 order.setPhoneNumber(Long.parseLong(textFromUser));
                 state = PAYMENT_METHOD;
@@ -125,7 +127,7 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
             } else if(state.equals(ADDITIONAL_INFO)){
                 order.setAdditionalInfo(textFromUser);
                 state = CONFIRM_ORDER;
-                String message = "<b>Замовлення: </b>\n\nОтримувач: " + order.getUserName() +
+                String message = "<b>Замовлення: </b>\n\nОтримувач: " + order.getUserName() + "\nНомер телефону: " + order.getPhoneNumber() +
                         "\nАдреса доставки: " + order.getDeliveryAddress() + "\nСпосіб оплати: " + order.getPaymentMethod() +
                         "\nДодаткова інформація: " + order.getAdditionalInfo() + "\n\n Страви: \n" + order.getOrderList() +
                         "\n<b>До сплати: " + order.getOrderPrice()+ " грн. </b>";
@@ -155,6 +157,12 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
             } else if ("Повернутися до перегляду кошика".equals(textFromUser)) {
                 state = CART;
                 sendMessage(chatId, "Повернулися до перегляду кошика.");
+            } else if("Перегляд минулих замовлень".equals(textFromUser)){
+                state = PREVIOUS_ORDERS_REVIEW;
+                sendMessage(chatId, "Оберіть замовлення, яке бажаєте переглянути:");
+            } else if(state.equals(PREVIOUS_ORDERS_REVIEW) && getElementFromOrdersByChatId(chatId).contains(textFromUser)) {
+                //було state.equals(PREVIOUS_ORDERS_REVIEW) && getIdOrdersByChatId(chatId).contains(textFromUser)
+                sendMessage(chatId, getOrderInfo(Objects.requireNonNull(getOrderById(Long.parseLong(textFromUser)))));
             } else {
                 state = MAIN_MENU;
                 sendMessage(chatId, "Введена команда не підтримується.");
@@ -168,15 +176,15 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
                 String message = "Страва " + callbackData + " була додана до кошику!";
                 state = ADDED_TO_CART;
                 sendMessage(chatId, message);
-            } else if (callbackData.equals("Кошик")) {
+            } else if (callbackData.equals("Кошик") && (state.equals(ADDED_TO_CART) || state.equals(CART_REVIEW))) {
                 state = CART;
                 sendMessage(chatId, cart.getCartInfo());
-            } else if (cart.getDishNamesToChange("Decrease").contains(callbackData)) {
+            } else if (cart.getDishNamesToChange("Decrease").contains(callbackData) && state.equals(CART_CHANGES)) {
                 callbackData = callbackData.replaceFirst("Decrease ", "");
                 cart.removeDish(callbackData);
                 state = CART_REVIEW;
                 sendMessage(chatId, "Кількість була зменшена!");
-            } else if (cart.getDishNamesToChange("Increase").contains(callbackData)) {
+            } else if (cart.getDishNamesToChange("Increase").contains(callbackData) && state.equals(CART_CHANGES)) {
                 callbackData = callbackData.replaceFirst("Increase ", "");
                 cart.addDishToCart(callbackData);
                 state = ADDED_TO_CART; //state = CART_REVIEW;
@@ -187,7 +195,7 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
                 sendMessage(chatId, "Вкажіть додаткову інформацію до замовлення:");
             } else if(callbackData.equals("Пропустити") && state.equals(ADDITIONAL_INFO)){
                 state = CONFIRM_ORDER;
-                String message = "<b>Замовлення: </b>\n\nОтримувач: " + order.getUserName() +
+                String message = "<b>Замовлення: </b>\n\nОтримувач: " + order.getUserName() + "\nНомер телефону: " + order.getPhoneNumber() +
                         "\nАдреса доставки: " + order.getDeliveryAddress() + "\nСпосіб оплати: " + order.getPaymentMethod() +
                         "\n\n Страви: \n" + order.getOrderList() +
                         "\n<b>До сплати: " + order.getOrderPrice()+ " грн. </b>";
@@ -220,6 +228,17 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
             message.setReplyMarkup(inlineKeyboardBuilder("Пропустити", "Пропустити"));
         } else if(state.equals(CONFIRM_ORDER)){
             message.setReplyMarkup(inlineKeyboardBuilder("Оформити замовлення", "Оформити замовлення"));
+        } //else if (state.equals(PREVIOUS_ORDERS_REVIEW)) {
+//            message.setReplyMarkup(keyboardBuilderForOrderElements(getIdOrdersByChatId(chatId)));
+//        } else if (state.equals(MAKE_ORDER)){
+//            message.setReplyMarkup(keyboardBuilderForOrderElements(getUserNamesFromOrdersByChatId(chatId)));
+//        } else if (state.equals(PHONE_NUMBER)){
+//            message.setReplyMarkup(keyboardBuilderForOrderElements(getPhoneNumberFromOrdersByChatId(chatId)));
+//        } else if (state.equals(DELIVERY_ADDRESS)){
+//            message.setReplyMarkup(keyboardBuilderForOrderElements(getAddressFromOrdersByChatId(chatId)));
+//        }
+        else if (state.equals(PREVIOUS_ORDERS_REVIEW) || state.equals(MAKE_ORDER) || state.equals(PHONE_NUMBER) || state.equals(DELIVERY_ADDRESS)){
+            message.setReplyMarkup(keyboardBuilderForOrderElements(getElementFromOrdersByChatId(chatId)));
         }
 
         try {
@@ -309,6 +328,7 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
             row = new KeyboardRow();
             row.add("Меню");
             row.add("Кошик");
+            row.add("Перегляд минулих замовлень");
             keyboardRows.add(row);
         } else if (state.equals(CATEGORY_OF_DISHES)) {
             row = new KeyboardRow();
@@ -437,4 +457,149 @@ public class FoodDeliveryBot extends TelegramLongPollingBot {
         state = ADD_TO_CART;
         sendDishPhoto(chatId, photo, message, dishName);
     }
+
+    private List<Order> getOrdersByChatId(long chatId){
+        var orders = ordersRepository.findAll();
+
+        List<Order> userOrders = new ArrayList<>();
+
+        for (Order order : orders){
+            if(order.getChatId() == chatId)
+                userOrders.add(order);
+        }
+
+        return userOrders;
+    }
+
+    private Order getOrderById(long orderId){
+        var orders = ordersRepository.findAll();
+
+        for (Order order : orders){
+            if(order.getId() == orderId)
+                return order;
+        }
+
+        return null;
+    }
+
+    //TODO: Винести в один метод створення List<String> різних атрибутів Orders
+//    private List<String> getIdOrdersByChatId(long chatId){
+//        List<Order> orders = getOrdersByChatId(chatId);
+//
+//        List<String> ordersId = new ArrayList<>();
+//
+//        for (Order order : orders){
+//            ordersId.add("" + order.getId());
+//        }
+//
+//        return ordersId;
+//    }
+//
+//    private List<String> getUserNamesFromOrdersByChatId(long chatId){
+//        List<Order> orders = getOrdersByChatId(chatId);
+//
+//        List<String> userNames = new ArrayList<>();
+//
+//        for (Order order : orders){
+//            if(!userNames.contains(order.getUserName()))
+//                userNames.add(order.getUserName());
+//        }
+//
+//        return userNames;
+//    }
+//
+//    private List<String> getAddressFromOrdersByChatId(long chatId){
+//        List<Order> orders = getOrdersByChatId(chatId);
+//
+//        List<String> address = new ArrayList<>();
+//
+//        for (Order order : orders){
+//            if(!address.contains(order.getDeliveryAddress()))
+//                address.add(order.getDeliveryAddress());
+//        }
+//
+//        return address;
+//    }
+//
+//    private List<String> getPhoneNumberFromOrdersByChatId(long chatId){
+//        List<Order> orders = getOrdersByChatId(chatId);
+//
+//        List<String> phoneNumber = new ArrayList<>();
+//
+//        for (Order order : orders){
+//            if (!phoneNumber.contains("" + order.getPhoneNumber()))
+//                phoneNumber.add("" + order.getPhoneNumber());
+//        }
+//
+//        return phoneNumber;
+//    }
+
+    private List<String> getElementFromOrdersByChatId(long chatId) {
+        List<Order> orders = getOrdersByChatId(chatId);
+
+        List<String> result = new ArrayList<>();
+
+        switch (state) {
+            case PREVIOUS_ORDERS_REVIEW:
+                for (Order order : orders) {
+                    result.add("" + order.getId());
+                }
+                break;
+            case MAKE_ORDER:
+                for (Order order : orders) {
+                    if (!result.contains(order.getUserName()))
+                        result.add(order.getUserName());
+                }
+                break;
+            case PHONE_NUMBER:
+                for (Order order : orders) {
+                    if (!result.contains("" + order.getPhoneNumber()))
+                        result.add("" + order.getPhoneNumber());
+                }
+                break;
+            case DELIVERY_ADDRESS:
+                for (Order order : orders) {
+                    if (!result.contains(order.getDeliveryAddress()))
+                        result.add(order.getDeliveryAddress());
+                }
+                break;
+        }
+
+        return result;
+    }
+
+    private String getOrderInfo(Order order){
+        String orderInfo = "<b>Замовлення №"+ order.getId() + "</b>\n\nСтатус: " + order.getStatus() + "\nОтримувач: " + order.getUserName() +
+                "\nНомер телефону: " + order.getPhoneNumber() + "\nАдреса доставки: " + order.getDeliveryAddress() +
+                "\nСпосіб оплати: " + order.getPaymentMethod();
+
+        if (order.getAdditionalInfo() != null){
+            orderInfo = orderInfo + "\nДодаткова інформація: " + order.getAdditionalInfo();
+        }
+        orderInfo = orderInfo + "\n\n Страви: \n" + order.getOrderList() + "\n<b>До сплати: " + order.getOrderPrice()+ " грн. </b>";
+
+        return orderInfo;
+    }
+
+    private ReplyKeyboardMarkup keyboardBuilderForOrderElements(List<String> list){
+        ReplyKeyboardMarkup keyboardMarkup = new ReplyKeyboardMarkup();
+        List<KeyboardRow> keyboardRows = new ArrayList<>();
+        KeyboardRow row = new KeyboardRow();
+
+        for (int i = 0; i < list.size(); i++) {
+            row.add(list.get(i));
+            if ((1 + i) % 3 == 0 || i == list.size() - 1) {
+                keyboardRows.add(row);
+                row = new KeyboardRow();
+            }
+        }
+        row = new KeyboardRow();
+
+        row.add("Повернутися в головне меню");
+        keyboardRows.add(row);
+
+        keyboardMarkup.setKeyboard(keyboardRows);
+        return keyboardMarkup;
+    }
+
 }
